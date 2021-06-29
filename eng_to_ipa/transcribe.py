@@ -87,9 +87,9 @@ def fetch_words(words_in, db_type="sql"):
         return list(d.items())
     if db_type.lower() == "json":
         words = []
-        for k, v in asset.items():
-            if k in words_in:
-                words.append((k, v))
+        for word in set(words_in):
+            if word in asset:
+                words.append((word, asset[word]))
         return words
 
 
@@ -98,9 +98,9 @@ def get_cmu(tokens_in, db_type="sql"):
     result = fetch_words(tokens_in, db_type)
     ordered = []
     for word in tokens_in:
-        this_word = [[i[1] for i in result if i[0] == word]][0]
-        if this_word:
-            ordered.append(this_word[0])
+        cmu = next(filter(lambda x: x[0] == word, result), None)
+        if cmu is not None:
+            ordered.append(cmu[1])
         else:
             ordered.append(["__IGNORE__" + word])
     return ordered
@@ -151,7 +151,7 @@ def cmu_to_ipa(cmu_list, mark=True, stress_marking='all'):
                 if not ipa_form.startswith(sym[0]):
                     ipa_form = ipa_form.replace(sym[0], sym[1])
             ipa_word_list.append(ipa_form)
-        final_list.append(sorted(list(set(ipa_word_list))))
+        final_list.append(list(dict.fromkeys(ipa_word_list))) # preserving order while remove duplications
     return final_list
 
 
