@@ -6,23 +6,28 @@ from collections import defaultdict
 
 
 class ModeType(object):
+    sqlite_mode = None
+    json_mode = None
 
-    def __init__(self, mode):
-        self.name = mode
+    @staticmethod
+    def get_mode(mode):
         if mode.lower() == "sql":
-            import sqlite3
-            conn = sqlite3.connect(join(abspath(dirname(__file__)),
-                                        "./resources/CMU_dict.db"))
-            self.mode = conn.cursor()
+            if ModeType.sqlite_mode is None:
+                import sqlite3
+                conn = sqlite3.connect(join(abspath(dirname(__file__)),
+                                            "./resources/CMU_dict.db"))
+                ModeType.sqlite_mode = conn.cursor()
+            return ModeType.sqlite_mode
         elif mode.lower() == "json":
-            import json
-            json_file = open(join(abspath(dirname(__file__)),
-                                  "../eng_to_ipa/resources/CMU_dict.json"),
-                             encoding="UTF-8")
-            self.mode = json.load(json_file)
-
-    def __str__(self):
-        return self.name
+            if ModeType.json_mode is None:
+                import json
+                json_file = open(join(abspath(dirname(__file__)),
+                                    "../eng_to_ipa/resources/CMU_dict.json"),
+                                encoding="UTF-8")
+                ModeType.json_mode = json.load(json_file)   
+            return ModeType.json_mode
+        else:
+            raise Exception("Invalid mode: " + mode)
 
 
 def preprocess(words):
@@ -70,7 +75,7 @@ def _punct_replace_word(original, transcription):
 
 def fetch_words(words_in, db_type="sql"):
     """fetches a list of words from the database"""
-    asset = ModeType(mode=db_type).mode
+    asset = ModeType.get_mode(db_type)
     if db_type.lower() == "sql":
         quest = "?, " * len(words_in)
         asset.execute("SELECT word, phonemes FROM dictionary "
@@ -175,13 +180,23 @@ def get_all(ipa_list):
             list_all[j] = list_all[j] + ipa_list[i][k] + " "
     return sorted([sent[:-1] for sent in list_all])
 
+def remove_stress_marks(ipas, stress='both'):
+    if ipas:
+        if stress == "primary" or stress == "none" or not stress:
+            ipas = [ipa.replace("ˈ", "") for ipa in ipas]
+        if stress == "primary" or stress == "none" or not stress:
+            ipas = [ipa.replace("ˌ", "") for ipa in ipas]
+    return ipas
 
-def ipa_list(words_in, keep_punct=True, stress_marks='both', db_type="sql"):
+def ipa_list(words_in, custom_ipa_dict={}, keep_punct=True, stress_marks='both', db_type="sql"):
     """Returns a list of all the discovered IPA transcriptions for each word."""
     words = [preserve_punc(w.lower())[0] for w in words_in.split()] \
         if type(words_in) == str else [preserve_punc(w.lower())[0] for w in words_in]
+    custom_ipa = [custom_ipa_dict.get(w[1], None) for w in words]
+    custom_ipa = [remove_stress_marks(i, stress_marks) for i in custom_ipa]
     cmu = get_cmu([w[1] for w in words], db_type=db_type)
     ipa = cmu_to_ipa(cmu, stress_marking=stress_marks)
+    ipa = [i_custom or i for i_custom, i in zip(custom_ipa, ipa)]
     if keep_punct:
         ipa = _punct_replace_word(words, ipa)
     return ipa
@@ -199,7 +214,7 @@ def isin_cmu(word, db_type="sql"):
 
 def contains(ipa, db_type="sql"):
     """Get any words that contain the IPA string. Returns the word and the IPA as a list."""
-    asset = ModeType(mode=db_type).mode
+    asset = ModeType.get_mode(db_type)
     if db_type.lower() == "sql":
         asset.execute("SELECT word, ipa FROM eng_ipa WHERE "
                       "REPLACE(REPLACE(ipa, 'ˌ', ''), 'ˈ', '') "
@@ -207,9 +222,9 @@ def contains(ipa, db_type="sql"):
         return [list(res) for res in asset.fetchall()]
 
 
-def convert(text, retrieve_all=False, keep_punct=True, stress_marks='both', mode="sql"):
+def convert(text, custom_ipa_dict={}, retrieve_all=False, keep_punct=True, stress_marks='both', mode="sql"):
     """takes either a string or list of English words and converts them to IPA"""
-    ipa = ipa_list(words_in=text, keep_punct=keep_punct,
+    ipa = ipa_list(words_in=text, custom_ipa_dict=custom_ipa_dict, keep_punct=keep_punct,
                    stress_marks=stress_marks, db_type=mode)
     return get_all(ipa) if retrieve_all else get_top(ipa)
 

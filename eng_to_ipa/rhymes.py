@@ -14,7 +14,7 @@ def get_rhymes(word, mode="sql"):
         return [get_rhymes(w) for w in word.split()]
     phones = remove_onset(preprocess(word))
     phones_full = get_cmu([preprocess(word)])[0][0]
-    asset = ModeType(mode=mode).mode
+    asset = ModeType.get_mode(mode)
     if mode == "sql":
         asset.execute("SELECT word, phonemes FROM dictionary WHERE phonemes " 
                       "LIKE \"%{0}\" AND NOT word=\"{1}\" ".format(phones, word) +
